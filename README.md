@@ -10,6 +10,63 @@ general reference guides to prove that out.
 set in [`eval/questions.json`](eval/questions.json) — see [`eval/eval.py`](eval/eval.py) and the
 Follow-up section below for the tuning work that was deliberately skipped.
 
+## Architecture
+
+```mermaid
+graph TD
+    Browser["Browser SPA (React)<br/>Landing / Login / Chat"]
+    API["FastAPI backend<br/>main.py"]
+    Chroma[("ChromaDB<br/>chunks + vectors<br/>— documents only")]
+    SQLite[("SQLite app.db<br/>users, tokens,<br/>conversations, messages")]
+    Groq["Groq API<br/>LLM generation"]
+    HFHub["Hugging Face Hub<br/>embedding model weights"]
+
+    Browser -- "Bearer token, HTTPS" --> API
+    API --> Chroma
+    API --> SQLite
+    API -- "prompt" --> Groq
+    Groq -- "answer" --> API
+    API -. "downloaded once, cached" .-> HFHub
+```
+
+**Two persistence layers, deliberately never mixed**: Chroma holds the document corpus (what
+the bot can cite) and nothing else — it has no idea a "user" or "conversation" exists. SQLite
+(`app.db`) holds identity and chat history and nothing about document content. Neither store's
+schema needs to know about the other, and wiping one to rebuild it (e.g. `ingest.py`'s full
+`reset_collection()`) can never touch the other.
+
+**Request flow — asking a question** (`POST /chat`, see `main.py` → `rag.py`):
+1. `get_current_user()` resolves the bearer token to a user via `auth_tokens` in SQLite, or 401s.
+2. If a `conversation_id` was sent, its prior messages are loaded from SQLite and turned into
+   `{question, answer}` pairs — this is the multi-turn history, assembled **server-side**, not
+   trusted from the client. No `conversation_id` → a new conversation row is created.
+3. If there's history, `rag.rewrite_standalone_query()` asks Groq to rewrite a follow-up like
+   "what about the async version?" into something retrieval can actually search on.
+4. That query is embedded (`bge-small-en-v1.5`) and searched against Chroma — top-`k` chunks by
+   cosine distance.
+5. The best hit's distance is checked against `RELEVANCE_THRESHOLD`. Below it: chunks go into
+   the prompt, Groq answers grounded in them. Above it: no context sent, Groq answers from its
+   own knowledge — either way, nothing in the UI calls out which mode was used.
+6. Both the question and the answer are written to SQLite as new rows in `messages`, and the
+   conversation's `title`/`updated_at` are touched. The response carries `sources`, `grounded`,
+   and the `conversation_id` (new or existing) back to the client.
+
+**Request flow — adding a document** (`POST /upload`, see `main.py` → `pdf_to_markdown.py` →
+`common.add_document_to_index()`): a PDF is converted to Markdown, saved under
+`backend/corpus/uploads/`, chunked on headings, embedded, and added to the **live** Chroma
+collection with a scoped delete-then-add keyed on that one file's path — never a full
+`reset_collection()` rebuild, so one upload never costs re-embedding the whole corpus, and it's
+visible to the next `/chat` call in the same process immediately (no restart needed). The
+`ingest.py` CLI path (batch/offline conversion) walks the whole `corpus/` folder and always does
+the full rebuild, since it has no notion of "just this one file changed."
+
+**Deployment (planned, not live yet)**: frontend on Vercel, backend on Hugging Face Spaces
+(Docker). HF Spaces' free tier has ephemeral storage — it wipes `app.db` and any uploaded
+documents on every restart/rebuild, which would silently break cross-device history — so
+`app.db` is moving to **Turso** (a hosted, SQLite-compatible database) rather than staying a
+local file once deployed. The document corpus itself is fine either way, since it's rebuildable
+from `backend/corpus/` (baked into the Docker image at build time via `ingest.py`).
+
 ## What it indexes
 
 116 Markdown files, deliberately spanning unrelated domains to prove the bot doesn't assume a
