@@ -1,0 +1,23 @@
+## Backend
+backend/venv/
+backend/chroma_db/
+backend/app.db
+backend/app.db-*
+backend/.env
+backend/__pycache__/
+**/__pycache__/
+*.pyc
+
+# Runtime-uploaded documents — instance data, not source. Some of these are
+# real third-party documents (not the fictional/demo corpus content), so
+# they never get committed regardless of what's uploaded in the future.
+backend/corpus/uploads/
+backend/corpus/some-folder/
+
+## Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+## OS
+.DS_Store

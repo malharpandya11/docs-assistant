@@ -1,0 +1,94 @@
+[
+  {
+    "question": "How do I declare a path parameter with an integer type?",
+    "expected_source_file": "tutorial/path-params.md"
+  },
+  {
+    "question": "How do I add CORS middleware to allow requests from my frontend?",
+    "expected_source_file": "tutorial/cors.md"
+  },
+  {
+    "question": "How do I upload a file from a form in a request?",
+    "expected_source_file": "tutorial/request-files.md"
+  },
+  {
+    "question": "How do I return a custom HTTP status code from a path operation?",
+    "expected_source_file": "tutorial/response-status-code.md"
+  },
+  {
+    "question": "How do I use OAuth2 with a JWT bearer token for authentication?",
+    "expected_source_file": "tutorial/security/oauth2-jwt.md"
+  },
+  {
+    "question": "How do I run background jobs after returning a response to the client?",
+    "expected_source_file": "tutorial/background-tasks.md"
+  },
+  {
+    "question": "How can dependencies with a yield statement clean up resources after the response is sent?",
+    "expected_source_file": "tutorial/dependencies/dependencies-with-yield.md"
+  },
+  {
+    "question": "How do I split a large application across multiple router files?",
+    "expected_source_file": "tutorial/bigger-applications.md"
+  },
+  {
+    "question": "What's the difference between StreamingResponse and a regular JSONResponse, and how do I return one directly?",
+    "expected_source_file": "advanced/custom-response.md"
+  },
+  {
+    "question": "How do I write async tests for my endpoints using httpx?",
+    "expected_source_file": "advanced/async-tests.md"
+  },
+  {
+    "question": "How do I containerize my app and what base image should the Dockerfile use?",
+    "expected_source_file": "deployment/docker.md"
+  },
+  {
+    "question": "What status code does FastAPI return when a request body fails Pydantic validation, and what does the error payload look like?",
+    "expected_source_file": "tutorial/handling-errors.md"
+  },
+  {
+    "question": "How do I run my app behind Nginx or Traefik when they strip a URL prefix before forwarding the request?",
+    "expected_source_file": "advanced/behind-a-proxy.md"
+  },
+  {
+    "question": "Why should I use Python type hints even if I'm not using a static type checker?",
+    "expected_source_file": "python-types.md"
+  },
+  {
+    "question": "How do I configure the number of Gunicorn worker processes for a FastAPI deployment?",
+    "expected_source_file": "deployment/server-workers.md"
+  },
+  {
+    "question": "How many days of annual leave do full-time employees accrue per year?",
+    "expected_source_file": "company/employee-handbook.md"
+  },
+  {
+    "question": "How many games do you need to win to take a set in tennis?",
+    "expected_source_file": "general/sports.md"
+  },
+  {
+    "question": "What's a safe amount of weight to add each session when progressively overloading a lift?",
+    "expected_source_file": "general/gym.md"
+  },
+  {
+    "question": "What blood pressure reading is generally considered normal?",
+    "expected_source_file": "general/health.md"
+  },
+  {
+    "question": "What percentage of income does the 50/30/20 budgeting rule allocate to savings?",
+    "expected_source_file": "general/finance.md"
+  },
+  {
+    "question": "What is the plot of the most recent Star Wars movie?",
+    "expected_source_file": null
+  },
+  {
+    "question": "How do I configure FastAPI to connect to a MongoDB database using Motor?",
+    "expected_source_file": null
+  },
+  {
+    "question": "What was the exact stock price of the company that created FastAPI on its IPO day?",
+    "expected_source_file": null
+  }
+]
