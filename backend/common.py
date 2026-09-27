@@ -12,7 +12,7 @@ CORPUS_DIR = Path(os.getenv("CORPUS_DIR", BASE_DIR / "corpus"))
 CHROMA_DIR = Path(os.getenv("CHROMA_DIR", BASE_DIR / "chroma_db"))
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "docs")
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-en-v1.5")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 TOP_K = int(os.getenv("TOP_K", "8"))
 
 # Cosine distance above which the best retrieved chunk is treated as "no
@@ -76,13 +76,16 @@ def reset_collection():
     return _collection
 
 
-def add_document_to_index(rel_path: str, text: str) -> int:
+def add_document_to_index(rel_path: str, text: str, content_hash: str | None = None) -> int:
     """Chunk, embed, and add one document to the live collection — an
     incremental add, not a rebuild. Safe to call repeatedly: existing chunks
     for the same rel_path are deleted first (scoped delete, not the
-    whole-collection churn reset_collection() exists to avoid), so
-    re-uploading a file replaces it instead of duplicating it. Returns the
-    number of chunks added."""
+    whole-collection churn reset_collection() exists to avoid). Note this
+    only replaces a prior version if it reused the same rel_path — /upload
+    generates a fresh random filename per call, so that alone doesn't stop
+    two uploads of the same file from becoming two indexed copies; that's
+    what content_hash + find_existing_source_by_hash() below are for.
+    Returns the number of chunks added."""
     from chunking import build_chunk_records
 
     collection = get_collection()
@@ -92,9 +95,24 @@ def add_document_to_index(rel_path: str, text: str) -> int:
     if not documents:
         return 0
 
+    if content_hash:
+        for metadata in metadatas:
+            metadata["content_hash"] = content_hash
+
     embeddings = embed_documents(documents)
     collection.add(ids=ids, documents=documents, embeddings=embeddings, metadatas=metadatas)
     return len(documents)
+
+
+def find_existing_source_by_hash(content_hash: str) -> str | None:
+    """Has a document with this exact content already been indexed? Used by
+    /upload to skip re-indexing a duplicate instead of adding a second copy
+    of the same chunks under a new random filename."""
+    collection = get_collection()
+    existing = collection.get(where={"content_hash": content_hash}, limit=1)
+    if existing["ids"]:
+        return existing["metadatas"][0]["source_file"]
+    return None
 
 
 def embed_documents(texts: list[str]) -> list[list[float]]:

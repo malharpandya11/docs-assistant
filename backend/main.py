@@ -1,3 +1,4 @@
+import hashlib
 import re
 import uuid
 from contextlib import asynccontextmanager
@@ -9,7 +10,13 @@ from pydantic import BaseModel
 
 import db
 from auth import get_current_user, hash_password, verify_password
-from common import CORPUS_DIR, add_document_to_index, get_collection, get_embedder
+from common import (
+    CORPUS_DIR,
+    add_document_to_index,
+    find_existing_source_by_hash,
+    get_collection,
+    get_embedder,
+)
 from pdf_to_markdown import looks_like_scanned_pdf, pdf_to_markdown_text
 from rag import answer_question
 
@@ -185,6 +192,8 @@ def chat(req: ChatRequest, user: dict = Depends(get_current_user)):
     if not question:
         raise HTTPException(status_code=400, detail="question must not be empty")
 
+    print(f"[chat] received question={question!r} from user={user['email']!r}")
+
     if req.conversation_id:
         conv = db.get_conversation(req.conversation_id, user["id"])
         if not conv:
@@ -226,6 +235,17 @@ def upload(file: UploadFile = File(...), user: dict = Depends(get_current_user))
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File too large (max 20MB)")
 
+    content_hash = hashlib.sha256(content).hexdigest()
+    existing_source = find_existing_source_by_hash(content_hash)
+    if existing_source:
+        print(f"[upload] {user['email']} re-uploaded {file.filename!r} — identical to already-indexed {existing_source!r}, skipped")
+        return UploadResponse(
+            filename=file.filename,
+            source_file=existing_source,
+            chunks_indexed=0,
+            warning="This exact document is already indexed — skipped to avoid duplicating it.",
+        )
+
     upload_dir = CORPUS_DIR / UPLOAD_SUBDIR
     upload_dir.mkdir(parents=True, exist_ok=True)
 
@@ -256,7 +276,7 @@ def upload(file: UploadFile = File(...), user: dict = Depends(get_current_user))
     md_path.write_text(md_text, encoding="utf-8")
     rel_path = str(md_path.relative_to(CORPUS_DIR))
 
-    chunks_indexed = add_document_to_index(rel_path, md_text)
+    chunks_indexed = add_document_to_index(rel_path, md_text, content_hash=content_hash)
     print(f"[upload] {user['email']} uploaded {file.filename!r} -> {rel_path} ({chunks_indexed} chunks)")
 
     return UploadResponse(

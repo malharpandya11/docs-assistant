@@ -11,6 +11,10 @@ from common import TOP_K, embed_query, get_collection
 def retrieve(question: str, k: int = TOP_K) -> list[dict]:
     collection = get_collection()
     query_embedding = embed_query(question)
+    print(
+        f"[query] embedded question -> {len(query_embedding)} dims, "
+        f"first 5 = {[round(v, 4) for v in query_embedding[:5]]}"
+    )
     result = collection.query(query_embeddings=[query_embedding], n_results=k)
 
     hits = []

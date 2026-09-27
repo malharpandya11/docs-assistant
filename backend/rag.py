@@ -2,7 +2,7 @@
 
 import os
 
-from common import GROQ_MODEL, RELEVANCE_THRESHOLD, TOP_K
+from common import OLLAMA_MODEL, RELEVANCE_THRESHOLD, TOP_K
 from query import retrieve
 
 SYSTEM_PROMPT = (
@@ -33,41 +33,43 @@ _client = None
 
 
 def get_client():
-    """Lazy so importing this module never requires GROQ_API_KEY to be set."""
+    """Lazy — connects to the local Ollama daemon. No API key: it's not a
+    hosted service, just `ollama serve` running on this machine."""
     global _client
     if _client is None:
-        api_key = os.getenv("GROQ_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "GROQ_API_KEY is not set. Copy backend/.env.example to backend/.env "
-                "and add a key from https://console.groq.com/keys"
-            )
-        from groq import Groq
+        import ollama
 
-        _client = Groq(api_key=api_key)
+        _client = ollama.Client()
     return _client
 
 
 def generate(prompt: str, *, system: str = SYSTEM_PROMPT, temperature: float = 0.1) -> str:
-    from groq import APIStatusError, RateLimitError
+    import httpx
+    import ollama
 
     client = get_client()
     try:
-        completion = client.chat.completions.create(
-            model=GROQ_MODEL,
+        response = client.chat(
+            model=OLLAMA_MODEL,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": prompt},
             ],
-            temperature=temperature,
+            # Ollama defaults to a 4096-token context regardless of the model's
+            # trained max — silently truncating whatever doesn't fit, with no
+            # error, unlike Groq/Gemini. 8 retrieved chunks + system prompt +
+            # question can exceed that; raising it is what actually prevents
+            # the silent-truncation-causes-hallucination failure mode.
+            options={"temperature": temperature, "num_ctx": 8192},
         )
-    except RateLimitError as e:
+    except httpx.ConnectError as e:
         raise RuntimeError(
-            "Groq's free-tier rate limit was hit. Wait a moment and try again."
+            "Could not reach Ollama — make sure it's running "
+            "(`brew services start ollama`)."
         ) from e
-    except APIStatusError as e:
-        raise RuntimeError(f"The LLM request failed ({e.status_code}): {e.message}") from e
-    return completion.choices[0].message.content
+    except ollama.ResponseError as e:
+        raise RuntimeError(f"Ollama request failed ({e.status_code}): {e.error}") from e
+    return response["message"]["content"]
 
 
 def rewrite_standalone_query(question: str, history: list[dict]) -> str:
@@ -103,7 +105,9 @@ def answer_question(
     hits = retrieve(search_query, k=k)
     print(f"[rag] retrieved {len(hits)} chunks for query={search_query!r}:")
     for h in hits:
+        snippet = h["text"][:150].replace("\n", " ")
         print(f"[rag]   dist={h['distance']:.4f}  {h['source_file']}  ({h['heading_path']})")
+        print(f"[rag]     {snippet}...")
 
     best_distance = hits[0]["distance"] if hits else None
     relevant = best_distance is not None and best_distance <= RELEVANCE_THRESHOLD
